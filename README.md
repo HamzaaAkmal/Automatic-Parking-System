@@ -30,4 +30,4 @@ Open `http://127.0.0.1:5000`. The first start downloads EasyOCR's English models
 {"payment_method":"Cash","items":[{"product_id":1,"quantity":2}]}
 ```
 
-The SQL file defines 50 tables for parking, customers, staff, inventory, checkout and daily records. The app reads the SQL file at startup and maps its tables through SQLAlchemy, so there is one schema to maintain. Keep the database file out of source control; remove `instance/parking.db` only when you want a fresh local database.
+`schema.sql` defines 50 tables. Their SQLAlchemy ORM classes are in `models.py`, and the routes use those classes to save visits, sales and stock changes. The app creates the local database at startup and seeds three sample products. Keep the database file out of source control; remove `instance/parking.db` only when you want a fresh local database.

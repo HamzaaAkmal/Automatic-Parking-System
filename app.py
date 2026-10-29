@@ -9,7 +9,8 @@ from PIL import Image, ImageDraw, ImageFont
 from ultralytics import YOLO
 from flask import Flask, request, jsonify, render_template, send_from_directory
 from config import Config
-from database import db, init_database, model
+from database import db, init_database
+from models import InventoryLevel, ParkingSession, PaymentMethod, PlateDetection, Product, Sale, SaleItem, StockMovement
 
 # ── App Setup ─────────────────────────────────────────────────────────────────
 app = Flask(__name__)
@@ -174,9 +175,7 @@ def process():
     # Generate slip
     entry_time  = datetime.now()
     slip_file   = generate_slip(plate_text, entry_time)
-    Detection = model("plate_detections")
-    ParkingSession = model("parking_sessions")
-    detection = Detection(plate_number=plate_text, image_path=anno_path, crop_path=crop_path)
+    detection = PlateDetection(plate_number=plate_text, image_path=anno_path, crop_path=crop_path)
     db.session.add(detection)
     db.session.flush()
     db.session.add(ParkingSession(
@@ -210,7 +209,6 @@ def history_page():
 
 @app.route("/api/history")
 def history():
-    ParkingSession = model("parking_sessions")
     sessions = db.session.query(ParkingSession).order_by(ParkingSession.id.desc()).limit(200).all()
     return jsonify([{
         "id": row.id,
@@ -229,16 +227,14 @@ def pos_page():
 
 @app.route("/api/products")
 def products():
-    Product = model("products")
-    Stock = model("inventory_levels")
-    rows = db.session.query(Product, Stock).join(Stock, Stock.product_id == Product.id).filter(Product.is_active == 1).order_by(Product.name).all()
+    rows = db.session.query(Product, InventoryLevel).join(InventoryLevel, InventoryLevel.product_id == Product.id).filter(Product.is_active == 1).order_by(Product.name).all()
     return jsonify([{
         "id": product.id,
         "name": product.name,
         "sku": product.sku,
         "price": float(product.price or 0),
-        "stock": stock.quantity_on_hand,
-    } for product, stock in rows])
+        "stock": inventory.quantity_on_hand,
+    } for product, inventory in rows])
 
 
 @app.route("/sales")
@@ -248,13 +244,6 @@ def sales_page():
 
 @app.route("/api/sales", methods=["GET", "POST"])
 def sales():
-    Sale = model("sales")
-    Item = model("sale_items")
-    Product = model("products")
-    Stock = model("inventory_levels")
-    StockMovement = model("stock_movements")
-    PaymentMethod = model("payment_methods")
-
     if request.method == "GET":
         rows = db.session.query(Sale).order_by(Sale.id.desc()).limit(200).all()
         return jsonify([{
@@ -285,7 +274,7 @@ def sales():
     cart = []
     for product_id, quantity in quantities.items():
         product = db.session.get(Product, product_id)
-        stock = db.session.query(Stock).filter_by(product_id=product_id).first()
+        stock = db.session.query(InventoryLevel).filter_by(product_id=product_id).first()
         if product is None or not product.is_active or stock is None:
             return jsonify({"error": "A selected product is unavailable."}), 404
         if stock.quantity_on_hand < quantity:
@@ -304,7 +293,7 @@ def sales():
         db.session.add(sale)
         db.session.flush()
         for product, stock, quantity in cart:
-            db.session.add(Item(sale_id=sale.id, product_id=product.id, quantity=quantity,
+            db.session.add(SaleItem(sale_id=sale.id, product_id=product.id, quantity=quantity,
                                 unit_price=product.price, line_total=float(product.price) * quantity))
             stock.quantity_on_hand -= quantity
             db.session.add(StockMovement(product_id=product.id, change_amount=-quantity,
@@ -319,7 +308,6 @@ def sales():
 
 @app.route("/api/sales/summary")
 def sales_summary():
-    Sale = model("sales")
     from sqlalchemy import func
 
     today = datetime.now().strftime("%Y-%m-%d")
@@ -332,8 +320,6 @@ def sales_summary():
 def dashboard_summary():
     from sqlalchemy import func
 
-    ParkingSession = model("parking_sessions")
-    Sale = model("sales")
     today = datetime.now().strftime("%Y-%m-%d")
     visits = db.session.query(func.count(ParkingSession.id)).filter(
         func.date(ParkingSession.entry_at) == today).scalar()
