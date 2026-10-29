@@ -1,2 +1,6 @@
 ultralyticss/
 .env/
+.venv/
+__pycache__/
+instance/
+static/slips/slip_*.png

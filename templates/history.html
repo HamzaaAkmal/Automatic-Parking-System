@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Parking History · ParkSmart</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <link rel="stylesheet" href="/static/css/pages.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-icon">P</span><span class="logo-text">ParkSmart</span></div>
+    <nav class="nav">
+      <a href="/" class="nav-item">Dashboard</a>
+      <a href="/history" class="nav-item active">History</a>
+      <a href="/pos" class="nav-item">Point of Sale</a>
+      <a href="/sales" class="nav-item">Sales</a>
+    </nav>
+    <div class="sidebar-footer">AI Parking v1.0</div>
+  </aside>
+  <main class="main">
+    <header class="topbar"><h1 class="page-title">Parking History</h1><a class="btn-outline" href="/">Back to dashboard</a></header>
+    <section class="card table-wrap">
+      <table><thead><tr><th>Plate</th><th>Entry</th><th>Exit</th><th>Fee</th><th>Status</th></tr></thead><tbody id="historyRows"><tr><td colspan="5">Loading…</td></tr></tbody></table>
+    </section>
+  </main>
+  <script src="/static/js/history.js"></script>
+</body>
+</html>

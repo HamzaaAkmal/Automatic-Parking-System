@@ -1,0 +1,9 @@
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; text-align: left; }
+th, td { padding: 13px 12px; border-bottom: 1px solid var(--purple-dark); font-size: 13px; }
+th { color: var(--purple-light); font-weight: 600; }
+td { color: var(--text-primary); }
+.form-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.form-row input, .form-row select { flex: 1; min-width: 120px; padding: 12px; color: var(--text-primary); background: var(--bg-raised); border: 1px solid var(--purple-dark); border-radius: 8px; }
+.sale-total { display: flex; justify-content: space-between; padding: 18px 0; font-size: 15px; }
+#posMessage { min-height: 20px; color: var(--purple-light); font-size: 13px; }

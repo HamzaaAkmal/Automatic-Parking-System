@@ -1,7 +1,4 @@
 /* ── State ─────────────────────────────────────────────────────────────────── */
-let totalVehicles = 0;
-let totalRevenue  = 0;
-
 /* ── DOM refs ──────────────────────────────────────────────────────────────── */
 const fileInput     = document.getElementById("fileInput");
 const dropZone      = document.getElementById("dropZone");
@@ -20,6 +17,17 @@ function updateClock() {
 }
 updateClock();
 setInterval(updateClock, 1000);
+
+async function loadDashboard() {
+  try {
+    const response = await fetch("/api/dashboard/summary");
+    const summary = await response.json();
+    document.getElementById("totalVehicles").textContent = summary.vehicles;
+    document.getElementById("lastPlate").textContent = summary.last_plate || "—";
+    document.getElementById("revenue").textContent = "Rs. " + summary.revenue.toFixed(2);
+  } catch { }
+}
+loadDashboard();
 
 /* ── File input handling ───────────────────────────────────────────────────── */
 dropZone.addEventListener("click", () => fileInput.click());
@@ -125,12 +133,7 @@ function showResult(data) {
   resultContent.style.display = "block";
   errorBox.style.display      = "none";
 
-  // Update dashboard counters
-  totalVehicles += 1;
-  totalRevenue  += 30;
-  document.getElementById("totalVehicles").textContent = totalVehicles;
-  document.getElementById("lastPlate").textContent     = data.plate;
-  document.getElementById("revenue").textContent       = "Rs. " + totalRevenue;
+  loadDashboard();
 }
 
 function showError(msg) {

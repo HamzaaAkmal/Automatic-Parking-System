@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sales · ParkSmart</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <link rel="stylesheet" href="/static/css/pages.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-icon">P</span><span class="logo-text">ParkSmart</span></div>
+    <nav class="nav">
+      <a href="/" class="nav-item">Dashboard</a>
+      <a href="/history" class="nav-item">History</a>
+      <a href="/pos" class="nav-item">Point of Sale</a>
+      <a href="/sales" class="nav-item active">Sales</a>
+    </nav>
+    <div class="sidebar-footer">AI Parking v1.0</div>
+  </aside>
+  <main class="main">
+    <header class="topbar"><h1 class="page-title">Sales</h1><a class="btn-outline" href="/pos">New sale</a></header>
+    <section class="stats-grid">
+      <div class="stat-card"><p class="stat-label">Sales today</p><p class="stat-value" id="salesTotal">Rs. 0</p></div>
+      <div class="stat-card accent"><p class="stat-label">Transactions today</p><p class="stat-value" id="salesCount">0</p></div>
+    </section>
+    <section class="card table-wrap">
+      <h2 class="card-title">Recent transactions</h2>
+      <table><thead><tr><th>Receipt</th><th>Date</th><th>Status</th><th>Total</th></tr></thead><tbody id="salesRows"><tr><td colspan="4">Loading…</td></tr></tbody></table>
+    </section>
+  </main>
+  <script src="/static/js/sales.js"></script>
+</body>
+</html>

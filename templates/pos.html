@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Point of Sale · ParkSmart</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <link rel="stylesheet" href="/static/css/pages.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-icon">P</span><span class="logo-text">ParkSmart</span></div>
+    <nav class="nav">
+      <a href="/" class="nav-item">Dashboard</a>
+      <a href="/history" class="nav-item">History</a>
+      <a href="/pos" class="nav-item active">Point of Sale</a>
+      <a href="/sales" class="nav-item">Sales</a>
+    </nav>
+    <div class="sidebar-footer">AI Parking v1.0</div>
+  </aside>
+  <main class="main">
+    <header class="topbar"><h1 class="page-title">Point of Sale</h1><a class="btn-outline" href="/sales">View sales</a></header>
+    <section class="content-grid">
+      <div class="card">
+        <h2 class="card-title">Add product</h2>
+        <form id="addItemForm" class="form-row">
+          <select id="productSelect" required aria-label="Product"><option value="">Loading products…</option></select>
+          <input id="quantity" type="number" min="1" value="1" required aria-label="Quantity" />
+          <button class="btn-primary" type="submit">Add</button>
+        </form>
+        <p id="posMessage" role="status"></p>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Current sale</h2>
+        <div class="table-wrap"><table><thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Line total</th></tr></thead><tbody id="cartRows"><tr><td colspan="4">No items yet</td></tr></tbody></table></div>
+        <div class="sale-total">Total <strong id="cartTotal">Rs. 0</strong></div>
+        <div class="form-row">
+          <select id="paymentMethod" aria-label="Payment method"><option>Cash</option><option>Card</option></select>
+          <button class="btn-primary" id="checkoutBtn" type="button" disabled>Complete sale</button>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script src="/static/js/pos.js"></script>
+</body>
+</html>

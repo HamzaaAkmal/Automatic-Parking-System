@@ -8,18 +8,23 @@ import easyocr
 from PIL import Image, ImageDraw, ImageFont
 from ultralytics import YOLO
 from flask import Flask, request, jsonify, render_template, send_from_directory
+from config import Config
+from database import db, init_database, model
 
 # ── App Setup ─────────────────────────────────────────────────────────────────
 app = Flask(__name__)
+app.config.from_object(Config)
+db.init_app(app)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)s  %(message)s")
 log = logging.getLogger(__name__)
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
-MODEL_PATH      = "best.pt"
-FONT_BOLD       = os.path.join("fonts", "Poppins", "Poppins-Bold.ttf")
-FONT_REGULAR    = os.path.join("fonts", "Poppins", "Poppins-Regular.ttf")
-SLIPS_DIR       = os.path.join("static", "slips")
+MODEL_PATH      = app.config["MODEL_PATH"]
+FONT_BOLD       = os.path.join("static", "fonts", "Poppins-Bold.ttf")
+FONT_REGULAR    = os.path.join("static", "fonts", "Poppins-Regular.ttf")
+SLIPS_DIR       = app.config["SLIPS_DIR"]
 os.makedirs(SLIPS_DIR, exist_ok=True)
+init_database(app)
 
 # ── Load Models Once ───────────────────────────────────────────────────────────
 log.info("Loading YOLO model …")
@@ -131,6 +136,7 @@ def index():
 
 
 @app.route("/process", methods=["POST"])
+@app.route("/api/detect", methods=["POST"])
 def process():
     """Receive image → detect plate → OCR → generate slip → return JSON."""
     if "image" not in request.files:
@@ -168,6 +174,19 @@ def process():
     # Generate slip
     entry_time  = datetime.now()
     slip_file   = generate_slip(plate_text, entry_time)
+    Detection = model("plate_detections")
+    ParkingSession = model("parking_sessions")
+    detection = Detection(plate_number=plate_text, image_path=anno_path, crop_path=crop_path)
+    db.session.add(detection)
+    db.session.flush()
+    db.session.add(ParkingSession(
+        plate_number=plate_text,
+        detection_id=detection.id,
+        entry_at=entry_time.strftime("%Y-%m-%d %H:%M:%S"),
+        fee_amount=30,
+        status="active",
+    ))
+    db.session.commit()
 
     return jsonify({
         "plate":      plate_text,
@@ -184,6 +203,152 @@ def serve_slip(filename):
     return send_from_directory(SLIPS_DIR, filename)
 
 
+@app.route("/history")
+def history_page():
+    return render_template("history.html")
+
+
+@app.route("/api/history")
+def history():
+    ParkingSession = model("parking_sessions")
+    sessions = db.session.query(ParkingSession).order_by(ParkingSession.id.desc()).limit(200).all()
+    return jsonify([{
+        "id": row.id,
+        "plate": row.plate_number,
+        "entry_time": row.entry_at,
+        "exit_time": row.exit_at,
+        "fee": float(row.fee_amount or 0),
+        "status": row.status,
+    } for row in sessions])
+
+
+@app.route("/pos")
+def pos_page():
+    return render_template("pos.html")
+
+
+@app.route("/api/products")
+def products():
+    Product = model("products")
+    Stock = model("inventory_levels")
+    rows = db.session.query(Product, Stock).join(Stock, Stock.product_id == Product.id).filter(Product.is_active == 1).order_by(Product.name).all()
+    return jsonify([{
+        "id": product.id,
+        "name": product.name,
+        "sku": product.sku,
+        "price": float(product.price or 0),
+        "stock": stock.quantity_on_hand,
+    } for product, stock in rows])
+
+
+@app.route("/sales")
+def sales_page():
+    return render_template("sales.html")
+
+
+@app.route("/api/sales", methods=["GET", "POST"])
+def sales():
+    Sale = model("sales")
+    Item = model("sale_items")
+    Product = model("products")
+    Stock = model("inventory_levels")
+    StockMovement = model("stock_movements")
+    PaymentMethod = model("payment_methods")
+
+    if request.method == "GET":
+        rows = db.session.query(Sale).order_by(Sale.id.desc()).limit(200).all()
+        return jsonify([{
+            "id": row.id,
+            "reference": row.reference,
+            "subtotal": float(row.subtotal),
+            "total": float(row.total),
+            "status": row.status,
+            "created_at": row.created_at,
+        } for row in rows])
+
+    payload = request.get_json(silent=True) or {}
+    items = payload.get("items")
+    if not isinstance(items, list) or not items:
+        return jsonify({"error": "Add at least one product."}), 400
+
+    try:
+        quantities = {}
+        for item in items:
+            product_id = int(item["product_id"])
+            quantity = int(item["quantity"])
+            if quantity < 1:
+                raise ValueError
+            quantities[product_id] = quantities.get(product_id, 0) + quantity
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"error": "Each item needs a valid product and quantity."}), 400
+
+    cart = []
+    for product_id, quantity in quantities.items():
+        product = db.session.get(Product, product_id)
+        stock = db.session.query(Stock).filter_by(product_id=product_id).first()
+        if product is None or not product.is_active or stock is None:
+            return jsonify({"error": "A selected product is unavailable."}), 404
+        if stock.quantity_on_hand < quantity:
+            return jsonify({"error": f"Not enough stock for {product.name}."}), 400
+        cart.append((product, stock, quantity))
+
+    subtotal = sum(float(product.price) * quantity for product, _, quantity in cart)
+    method = db.session.query(PaymentMethod).filter_by(name=payload.get("payment_method", "Cash")).first()
+    if method is None:
+        return jsonify({"error": "Choose Cash or Card for payment."}), 400
+
+    reference = f"POS-{datetime.now():%Y%m%d%H%M%S%f}"
+    sale = Sale(reference=reference, subtotal=subtotal, tax_amount=0, total=subtotal,
+                payment_method_id=method.id, status="paid")
+    try:
+        db.session.add(sale)
+        db.session.flush()
+        for product, stock, quantity in cart:
+            db.session.add(Item(sale_id=sale.id, product_id=product.id, quantity=quantity,
+                                unit_price=product.price, line_total=float(product.price) * quantity))
+            stock.quantity_on_hand -= quantity
+            db.session.add(StockMovement(product_id=product.id, change_amount=-quantity,
+                                         reason=f"Sale {reference}"))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+
+    return jsonify({"id": sale.id, "reference": reference, "total": subtotal, "status": "paid"}), 201
+
+
+@app.route("/api/sales/summary")
+def sales_summary():
+    Sale = model("sales")
+    from sqlalchemy import func
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    count, total = db.session.query(func.count(Sale.id), func.coalesce(func.sum(Sale.total), 0)).filter(
+        func.date(Sale.created_at) == today, Sale.status == "paid").one()
+    return jsonify({"date": today, "transactions": count, "total_sales": float(total)})
+
+
+@app.route("/api/dashboard/summary")
+def dashboard_summary():
+    from sqlalchemy import func
+
+    ParkingSession = model("parking_sessions")
+    Sale = model("sales")
+    today = datetime.now().strftime("%Y-%m-%d")
+    visits = db.session.query(func.count(ParkingSession.id)).filter(
+        func.date(ParkingSession.entry_at) == today).scalar()
+    last = db.session.query(ParkingSession).order_by(ParkingSession.id.desc()).first()
+    parking_fees = db.session.query(func.coalesce(func.sum(ParkingSession.fee_amount), 0)).filter(
+        func.date(ParkingSession.entry_at) == today).scalar()
+    sales_total = db.session.query(func.coalesce(func.sum(Sale.total), 0)).filter(
+        func.date(Sale.created_at) == today, Sale.status == "paid").scalar()
+    return jsonify({
+        "vehicles": visits,
+        "last_plate": last.plate_number if last else None,
+        "revenue": float(parking_fees or 0) + float(sales_total or 0),
+    })
+
+
 # ── Run ────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(port=5000, use_reloader=False)
